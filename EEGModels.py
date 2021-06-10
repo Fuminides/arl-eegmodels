@@ -51,6 +51,7 @@ from tensorflow.keras.layers import Input, Flatten
 from tensorflow.keras.constraints import max_norm
 from tensorflow.keras import backend as K
 
+import numpy as np
 
 def EEGNet(nb_classes, Chans = 64, Samples = 128, 
              dropoutRate = 0.5, kernLength = 64, F1 = 8, 
@@ -399,4 +400,55 @@ def ShallowConvNet(nb_classes, Chans = 64, Samples = 128, dropoutRate = 0.5):
     
     return Model(inputs=input_main, outputs=softmax)
 
+def load_BCI_IIIa():
+    import scipy.io as sio
+    Window_Length = 7*250 
+    subjects = 12
+    res = []; y_res=[]
+    PATH = '/home/javier/Documents/Graz/'
+    global_NO_valid_trial = 0
+    
+    for subject in range(subjects):
+        NO_valid_trial = 0
+        a = sio.loadmat(PATH+'S0'+str(subject)+'T.mat')
+        a_data = a['data']
+        for ii in range(0,a_data.size):
+            a_data1     = a_data[0,ii]
+            a_data2     = [a_data1[0,0]]
+            a_data3     = a_data2[0]
+            a_X         = a_data3[0]
+            a_trial     = a_data3[1]
+            a_y         = a_data3[2]
+            a_fs         = a_data3[3]
+            a_classes     = a_data3[4]
+            try:
+                a_artifacts = a_data3[5]
+                a_gender     = a_data3[6]
+                a_age         = a_data3[7]
+            except IndexError:
+                a_artifacts = np.zeros(a_trial.size)
+                a_trial     = np.ravel(a_trial)
+                a_y         = np.ravel(a_y)
+                
+            data_return = np.zeros((a_trial.size,15,Window_Length))
+            class_return = np.zeros(a_trial.size)
+            for trial in range(0,a_trial.size):
+                if(a_artifacts[trial]==0):
+                    data_return[NO_valid_trial,:,:] = np.transpose(a_X[int(a_trial[trial]):(int(a_trial[trial])+Window_Length),:22])
+                    class_return[NO_valid_trial] = int(a_y[trial])
+                    NO_valid_trial +=1
+        res.append(data_return); y_res.append(class_return)            
+    global_NO_valid_trial += NO_valid_trial                    
+           
+    col_mean = np.nanmean(data_return, axis=0)
+    inds = np.where(np.isnan(data_return))
+    data_return[inds] = np.take(col_mean, inds[1])
+    
+    return res, y_res
 
+def eval_III_IIIa():
+    data_path 	= '/home/javier/Documents/Graz/'
+    
+    model = ShallowConvNet(2, Chans = 15, Samples = 128, dropoutRate = 0.5)
+    
+     
